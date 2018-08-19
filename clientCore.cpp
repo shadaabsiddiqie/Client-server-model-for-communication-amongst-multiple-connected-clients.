@@ -65,14 +65,30 @@ int main(int argc, char *argv[]){
             buffer[valread] = '\0';
             // cout <<"-------start"<<endl;
             cout << buffer << endl;
-            cout << ">>" ;
+            
             // cout <<"-------ebd"<<endl;
         }
         
         if(FD_ISSET(0,&ioOrServer)){
             int valread = read(0,buffer,1024);
             buffer[valread-1] = '\0';
-            send(clientSocket,buffer,1024,0);    
+            string s(buffer);
+            if(s=="help"){
+                cout <<"All commands : "<< endl;
+                        cout <<"    "<<"create chatroom {chatRoom1}"<< endl;
+                        cout <<"    "<<"list chatrooms"<< endl;
+                        cout <<"    "<<"join {chatRoom1}"<< endl;
+                        cout <<"    "<<"leave"<< endl;
+                        cout <<"    "<<"list users"<< endl;
+                        cout <<"    "<<"add {user2}"<< endl;
+                        cout <<"    "<<"reply \"message content\""<< endl;
+                        cout <<"    "<<"reply A.txt tcp"<< endl;
+                        cout <<"    "<<"reply A.txt udp"<< endl;
+                        cout <<"    "<<"my chatroom"<< endl;
+            }else{
+                cout << ">>" ;
+                send(clientSocket,buffer,1024,0);
+            }
         }
     }    
     return 0;

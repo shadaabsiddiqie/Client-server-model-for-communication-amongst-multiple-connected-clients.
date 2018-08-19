@@ -17,7 +17,7 @@ int main(int argc ,char *argv[]){
     int serverPort = strtol(argv[3],NULL,10);
     map <int, string> usersMap;
     map <int, string> chatRoomMap;
-    vector<string> listRoom; 
+    map <string, int> noUsersInChatroom; 
     vector<int> clientSocket(clientLimit,0);//initialising client scoket
     
     int masterSocket = 0 ;//creating master node
@@ -123,6 +123,13 @@ int main(int argc ,char *argv[]){
                 if ((valread = read( sd , buffer, 1024)) == 0){//Client has been disconnected 
                     getpeername(sd , (struct sockaddr*)&address,(socklen_t*)&addrlen);  
                     printf("Host disconnected , ip %s , port %d \n" , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));  
+                    if(chatRoomMap.find(i) != chatRoomMap.end()){//he was in a group previously
+                        noUsersInChatroom[chatRoomMap[i]]--;
+                        if(noUsersInChatroom[chatRoomMap[i]]==0){//distroy the room
+                            noUsersInChatroom.erase(chatRoomMap[i]);
+                        }
+                        chatRoomMap.erase(i);
+                    }
                     close( sd );  
                     clientSocket[i] = 0;  
                 }     
@@ -146,61 +153,141 @@ int main(int argc ,char *argv[]){
                         //client want to send file
                     }else if(query[0]=="reply"){
                         //client want to send message
-                        string reply ;
+                        string reply = usersMap[i] + " : ";
                         for(int j = 1 ; j < query.size() ; j++){
                             reply = reply + query[j] +" ";
                         }
-                        cout << "reply will be : " << reply << endl; 
-                        for(int j = 0 ; j< clientLimit ; j++){
-                            int sdBrodcast = clientSocket[j];
-                            if(sdBrodcast>0 && sdBrodcast!=sd){
-                                send(sdBrodcast , reply.c_str() , strlen(reply.c_str()) , 0 );
+                        cout << "reply will be : " << reply << endl;
+                        if(chatRoomMap.find(i)!=chatRoomMap.end()){
+                            for(int j = 0 ; j< clientLimit ; j++){
+                                if( chatRoomMap.find(j)!=chatRoomMap.end() ){
+                                    int sdBrodcast = clientSocket[j];
+                                    if(sdBrodcast>0 && sdBrodcast!=sd && chatRoomMap[i]==chatRoomMap[j]){
+                                        send(sdBrodcast , reply.c_str() , strlen(reply.c_str()) , 0 );
+                                    }
+                                }
                             }
-                        }
+                        }else{
+                            string a = "U are not in any chat room plz join to chat";
+                            send(sd, a.c_str() , strlen(a.c_str()) , 0 );
+                        } 
                     }else if(query[0]=="lU"){
                         for (auto it : usersMap){
                             cout << " " << it.first << ":" << it.second << endl;    
                         } 
                     }else if(query[0]=="create"&& query[1]=="chatroom"){
-                        listRoom.push_back(query[2]);
-                        chatRoomMap.insert(pair <int, string>(i,query[2]));    
+                        if(noUsersInChatroom.find(query[2]) == noUsersInChatroom.end()){
+                            if(chatRoomMap.find(i) != chatRoomMap.end()){//he was in a group previously
+                                noUsersInChatroom[chatRoomMap[i]]--;
+                                if(noUsersInChatroom[chatRoomMap[i]]==0){//distroy the room
+                                    noUsersInChatroom.erase(chatRoomMap[i]);
+                                }
+                                chatRoomMap.erase(i);
+                            }
+                            noUsersInChatroom.insert(pair <string, int> (query[2], 1));
+                            chatRoomMap.insert(pair <int, string>(i,query[2]));
+                            string a = "new chatroom : " + query[2] +" is created";
+                            send(sd, a.c_str() , strlen(a.c_str()) , 0 );     
+                        }
+                        else{
+                            perror("chatroom with that name already exit");
+                        }       
                     }else if(query[0]=="join"){
-                        chatRoomMap.insert(pair <int, string>(i,query[1]));
+                        if(noUsersInChatroom.find(query[1]) != noUsersInChatroom.end() ){
+                            cout << "bug"<<endl;
+                            if(chatRoomMap.find(i) != chatRoomMap.end()){//he was in a group previously
+                                noUsersInChatroom[chatRoomMap[i]]--;
+                                if(noUsersInChatroom[chatRoomMap[i]]==0){//distroy the room
+                                    noUsersInChatroom.erase(chatRoomMap[i]);
+                                }
+                                chatRoomMap.erase(i);
+                            }
+                            chatRoomMap.insert(pair <int, string>(i,query[1]));
+                            noUsersInChatroom[query[1]]++;
+                            string a = "U have joined : " + query[1] +" chatroom";
+                            send(sd, a.c_str() , strlen(a.c_str()) , 0 );   
+                        }else{
+                            string a = query[1] +" chatroom doesnot exit";
+                            send(sd, a.c_str() , strlen(a.c_str()) , 0 );
+                            perror("chatroom with that name doesnot exit");
+                        }
                     }else if(query[0]=="leave"){
-                        chatRoomMap.erase(i);
+                        if(chatRoomMap.find(i) != chatRoomMap.end()){//he was in a group previously
+                            noUsersInChatroom[chatRoomMap[i]]--;
+                            if(noUsersInChatroom[chatRoomMap[i]]==0){//distroy the room
+                                noUsersInChatroom.erase(chatRoomMap[i]);
+                            }
+                            string a = "U have left : " + chatRoomMap[i] +" chatroom";
+                            send(sd, a.c_str() , strlen(a.c_str()) , 0 );
+                            chatRoomMap.erase(i);
+                        }else{
+                            string a = "U are not in any chatroom";
+                            send(sd, a.c_str() , strlen(a.c_str()) , 0 );
+                            perror("U are not in any chatroom");
+                        }
                     }else if(query[0]=="list" && query[1]=="chatrooms"){
-                        for(int j = 0 ; j < listRoom.size();j++){
-                            cout << listRoom[j] << endl;
+                        string a = "List of chatrooms :\n";
+                        for (auto it : noUsersInChatroom){
+                            a = a + it.first + "\n"; 
+                            cout << " " << it.first << " has " << it.second <<"users"<<endl;    
                         }
-                    }else if(query[0]=="list" && query[1]=="users"){
-                        for (auto it : usersMap){
-                            if(chatRoomMap[it.first]==chatRoomMap[i]){
-                                cout << " " << it.first << ":" << it.second << endl;
+                        send(sd, a.c_str() , strlen(a.c_str()) , 0 );
+                    }
+                    else if(query[0]=="list" && query[1]=="users"){
+                        if(chatRoomMap.find(i) != chatRoomMap.end()){//he was in a group previously
+                            string a = "Users in Ur chatroom : " + chatRoomMap[i] + " are \n" ;
+                            for (auto it : usersMap){
+                                if(chatRoomMap[it.first]==chatRoomMap[i]){
+                                    a = a + it.second + "\n";
+                                    // cout << " " << it.first << ":" << it.second << endl;
+                                }
                             }
+                            send(sd, a.c_str() , strlen(a.c_str()) , 0 );
+                        }else{
+                            string a = "U are not in any chatroom";
+                            send(sd, a.c_str() , strlen(a.c_str()) , 0 );
                         }
-                    }else if(query[0]=="add"){
-                        for(auto it : usersMap){
-                            if(it.second==query[1]){
-                                chatRoomMap[it.first] = chatRoomMap[i];
+                    }
+                    else if(query[0]=="add"){
+                        if(chatRoomMap.find(i) != chatRoomMap.end()){
+                            int ur = -1 ;
+                            for(auto it : usersMap){
+                                if(it.second==query[1]){
+                                    ur = it.first;
+                                    break;
+                                }
                             }
+                            if(ur == -1){
+                                string a = "That user does not exit";
+                                send(sd, a.c_str() , strlen(a.c_str()) , 0 );    
+                            }else{
+                                if(chatRoomMap.find(ur) != chatRoomMap.end()){//he was in a group previously
+                                    string a = "user is already in a chatroom Sorry:";
+                                    send(sd, a.c_str() , strlen(a.c_str()) , 0 );
+                                }else{
+                                    noUsersInChatroom[chatRoomMap[ur]]--;
+                                    if(noUsersInChatroom[chatRoomMap[ur]]==0){//distroy the room
+                                        noUsersInChatroom.erase(chatRoomMap[ur]);
+                                    }
+                                    chatRoomMap.erase(ur);
+                                    chatRoomMap.insert(pair <int, string>(ur,chatRoomMap[i]));
+                                    noUsersInChatroom[chatRoomMap[i]]++;
+                                    string a = "U have joined : " + chatRoomMap[i] +" chatroom";
+                                    send(clientSocket[ur], a.c_str() , strlen(a.c_str()) , 0 );    
+                                }
+                            }
+                        }else{
+                            string a = "U are not in any chatroom";
+                            send(sd, a.c_str() , strlen(a.c_str()) , 0 );
                         }
                     }
                     else if(query[0]=="my" && query[1]=="chatroom"){
-                        cout << chatRoomMap[i] << endl;
+                        string a = "U are in : " + chatRoomMap[i];
+                        send(sd, a.c_str() , strlen(a.c_str()) , 0 );
+                    }else{
+                        string a = "command not found ";
+                        send(sd, a.c_str() , strlen(a.c_str()) , 0 );
                     }
-                    else if(query[0]=="help"){
-                        cout <<"All commands : "<< endl;
-                        cout <<"    "<<"create chatroom {chatRoom1}"<< endl;
-                        cout <<"    "<<"list chatrooms"<< endl;
-                        cout <<"    "<<"join {chatRoom1}"<< endl;
-                        cout <<"    "<<"leave"<< endl;
-                        cout <<"    "<<"list users"<< endl;
-                        cout <<"    "<<"add {user2}"<< endl;
-                        cout <<"    "<<"reply \"message content\""<< endl;
-                        cout <<"    "<<"reply A.txt tcp"<< endl;
-                        cout <<"    "<<"reply A.txt udp"<< endl;
-                        cout <<"    "<<"my chatroom"<< endl;   
-                    } 
                 }
             }  
         }
