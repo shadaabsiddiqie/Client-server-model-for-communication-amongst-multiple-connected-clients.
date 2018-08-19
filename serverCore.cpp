@@ -15,7 +15,9 @@ int main(int argc ,char *argv[]){
     int clientLimit = strtol(argv[1],NULL,10);
     char *serverIP = argv[2];
     int serverPort = strtol(argv[3],NULL,10);
-    cout<< "bug" << endl;
+    map <int, string> usersMap;
+    map <int, string> chatRoomMap;
+    vector<string> listRoom; 
     vector<int> clientSocket(clientLimit,0);//initialising client scoket
     
     int masterSocket = 0 ;//creating master node
@@ -47,7 +49,7 @@ int main(int argc ,char *argv[]){
     cout << "server is listening at "<< serverIP << " " << serverPort <<endl;
 
     //master should have at max of 3 pending connections
-    if (listen(masterSocket, 3) < 0){  
+    if (listen(masterSocket, clientLimit) < 0){  
         perror("listen");  
         exit(EXIT_FAILURE);  
     }
@@ -68,7 +70,7 @@ int main(int argc ,char *argv[]){
         for ( int i = 0 ; i < clientLimit ; i++){     
             int sd = clientSocket[i];  
             if(sd > 0) //if sd is valed then puch in allFds  
-                FD_SET( sd , &allFds);      
+                FD_SET( sd , &allFds);
             if(sd > maxSd)//updating maxSd with latest sd
                 maxSd = sd;  
         }
@@ -90,13 +92,21 @@ int main(int argc ,char *argv[]){
             
             //Greet new client
             string greet = "new client how are U?";
-            send(newSocket, greet.c_str(), strlen(greet.c_str()), 0){  
+            send(newSocket, greet.c_str(), strlen(greet.c_str()), 0) ;
             
             cout << "Greeting has been sent" << endl;
 
+            char name[1024];
+            int v;
+            if ((v = read(newSocket,name, 1024))!=0){
+                name[v] = '\0';
+            } 
+            
+            string s(name);
             //add newSocket to clientSocket[] vector
             for (int i = 0; i < clientLimit; i++){
-                if( clientSocket[i] == 0 ){  
+                if( clientSocket[i] == 0 ){
+                    usersMap.insert(pair <int, string> (i,s));
                     clientSocket[i] = newSocket;  
                     printf("Adding to list of sockets as %d\n" , i);
                     break;  
@@ -118,12 +128,79 @@ int main(int argc ,char *argv[]){
                 }     
                 //Client has not been disconnected and it has sent some message 
                 else{  
-                    //set the string terminating NULL byte on the end 
-                    //of the data read 
-                    buffer[valread] = '\0'; 
-                    cout <<"asdkjf"<<endl;
-                    cout << buffer << endl; 
-                    send(sd , buffer , strlen(buffer) , 0 );  
+                    buffer[valread] = '\0';
+                    //cout << buffer << endl;
+                    // string baseQuery = s(buffer);
+                    vector<string> query; 
+                    char *token = strtok(buffer, " ");
+                    string s(token);
+                    query.push_back(s);
+                    while (token != NULL){
+                        // printf("%s\n", token);
+                        token = strtok(NULL, " ");
+                        if(token == NULL) break;
+                        string s1(token);
+                        query.push_back(s1);
+                    }
+                    if(query[0]=="reply" && (query[2]=="udp" || query[2]=="tcp")){
+                        //client want to send file
+                    }else if(query[0]=="reply"){
+                        //client want to send message
+                        string reply ;
+                        for(int j = 1 ; j < query.size() ; j++){
+                            reply = reply + query[j] +" ";
+                        }
+                        cout << "reply will be : " << reply << endl; 
+                        for(int j = 0 ; j< clientLimit ; j++){
+                            int sdBrodcast = clientSocket[j];
+                            if(sdBrodcast>0 && sdBrodcast!=sd){
+                                send(sdBrodcast , reply.c_str() , strlen(reply.c_str()) , 0 );
+                            }
+                        }
+                    }else if(query[0]=="lU"){
+                        for (auto it : usersMap){
+                            cout << " " << it.first << ":" << it.second << endl;    
+                        } 
+                    }else if(query[0]=="create"&& query[1]=="chatroom"){
+                        listRoom.push_back(query[2]);
+                        chatRoomMap.insert(pair <int, string>(i,query[2]));    
+                    }else if(query[0]=="join"){
+                        chatRoomMap.insert(pair <int, string>(i,query[1]));
+                    }else if(query[0]=="leave"){
+                        chatRoomMap.erase(i);
+                    }else if(query[0]=="list" && query[1]=="chatrooms"){
+                        for(int j = 0 ; j < listRoom.size();j++){
+                            cout << listRoom[j] << endl;
+                        }
+                    }else if(query[0]=="list" && query[1]=="users"){
+                        for (auto it : usersMap){
+                            if(chatRoomMap[it.first]==chatRoomMap[i]){
+                                cout << " " << it.first << ":" << it.second << endl;
+                            }
+                        }
+                    }else if(query[0]=="add"){
+                        for(auto it : usersMap){
+                            if(it.second==query[1]){
+                                chatRoomMap[it.first] = chatRoomMap[i];
+                            }
+                        }
+                    }
+                    else if(query[0]=="my" && query[1]=="chatroom"){
+                        cout << chatRoomMap[i] << endl;
+                    }
+                    else if(query[0]=="help"){
+                        cout <<"All commands : "<< endl;
+                        cout <<"    "<<"create chatroom {chatRoom1}"<< endl;
+                        cout <<"    "<<"list chatrooms"<< endl;
+                        cout <<"    "<<"join {chatRoom1}"<< endl;
+                        cout <<"    "<<"leave"<< endl;
+                        cout <<"    "<<"list users"<< endl;
+                        cout <<"    "<<"add {user2}"<< endl;
+                        cout <<"    "<<"reply \"message content\""<< endl;
+                        cout <<"    "<<"reply A.txt tcp"<< endl;
+                        cout <<"    "<<"reply A.txt udp"<< endl;
+                        cout <<"    "<<"my chatroom"<< endl;   
+                    } 
                 }
             }  
         }

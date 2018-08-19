@@ -31,7 +31,8 @@ int main(int argc, char *argv[]){
         printf("\nConnection Failed \n");
         return -1;
     }
-    string hello = "Hello from client";
+    send(clientSocket,Name.c_str(),strlen(Name.c_str()),0);
+
     char buffer[1024] = {0};
 
     fd_set ioOrServer;
@@ -39,37 +40,40 @@ int main(int argc, char *argv[]){
         FD_ZERO(&ioOrServer);//clear allFds  
         FD_SET(clientSocket, &ioOrServer);
         FD_SET(0, &ioOrServer);
-        if(FD_ISSET(0,&ioOrServer) || FD_ISSET(clientSocket,&ioOrServer)){
-            
-            // cout << "----All commands----- :" << endl;
-            // cout << "create chatroom chatRoom1" << endl;
-            // cout << "list chatrooms" << endl;
-            // cout << "join chatRoom1" << endl;
-            // cout << "leave" << endl;
-            // cout << "list users" << endl;
-            // cout << "add user2" << endl;
-            // cout << "reply message content" << endl;
-            // cout << "reply A.txt tcp" << endl;
-            // cout << "reply A.txt udp" << endl;
-            cout << ">>" ;
+        int activity = select( clientSocket + 1 , &ioOrServer , NULL , NULL , NULL);
+        if ((activity < 0) && (errno!=EINTR)){  
+            printf("select error");  
         }
+        // if(FD_ISSET(0,&ioOrServer) || FD_ISSET(clientSocket,&ioOrServer)){
+            
+        //     // cout << "----All commands----- :" << endl;
+        //     // cout << "create chatroom chatRoom1" << endl;
+        //     // cout << "list chatrooms" << endl;
+        //     // cout << "join chatRoom1" << endl;
+        //     // cout << "leave" << endl;
+        //     // cout << "list users" << endl;
+        //     // cout << "add user2" << endl;
+        //     // cout << "reply message content" << endl;
+        //     // cout << "reply A.txt tcp" << endl;
+        //     // cout << "reply A.txt udp" << endl;
+        //     // cout << ">>" ;
+        // }
 
         
         if(FD_ISSET(clientSocket,&ioOrServer)){
             int valread = read(clientSocket,buffer,1024);
+            buffer[valread] = '\0';
+            // cout <<"-------start"<<endl;
             cout << buffer << endl;
+            cout << ">>" ;
+            // cout <<"-------ebd"<<endl;
         }
         
         if(FD_ISSET(0,&ioOrServer)){
-            read(0,buffer,1024);
+            int valread = read(0,buffer,1024);
+            buffer[valread-1] = '\0';
             send(clientSocket,buffer,1024,0);    
         }
-        // int valread = read(clientSocket,buffer,1024);
-        // printf("%s\n",buffer );
-        // // cin >> *hello;
-        // hello = "I am fine server";
-        // send(clientSocket , hello.c_str() , strlen(hello.c_str()) , 0 );
-        // printf("Hello message sent\n");
     }    
     return 0;
 }
